@@ -1,0 +1,173 @@
+version: "3"
+
+services:
+  gateway:
+    image: gateway-service
+    container_name: gateway-service
+    build: ./gateway
+    volumes:
+      - ./gateway/:/app/
+      - /app/node_modules
+    restart: always
+    environment:
+      PORT: 8000
+      USER_SERVICE_URL: http://user-service:3000
+      NOTE_SERVICE_URL: http://note-service:4000
+      NOTIFY_SERVICE_URL: http://notify:5000
+    ports:
+      - 8000:8000
+    depends_on:
+      - users
+      - notify
+      - notes
+
+  db_users:
+    container_name: db_users
+    image: postgres:14.1-alpine
+    hostname: db_users
+    restart: always
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: db_users
+    volumes:
+      - db_users_data:/var/lib/postgresql/data
+
+  users:
+    image: user-service
+    container_name: user-service
+    build: ./users
+    hostname: user-service
+    volumes:
+      - ./users/:/app/
+      - /app/node_modules
+    restart: always
+    environment:
+      DB_HOST: db_users
+      PORT: 3000
+      DB_PORT: 5433
+      DB_NAME: db_users
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_SERVER_URL: ${RABBITMQ_SERVER_URL}
+    ports:
+      - 3000:3000
+    depends_on:
+      - db_users
+
+  db_notify:
+    container_name: db_notify
+    image: postgres:14.1-alpine
+    hostname: db_notify
+    restart: always
+    ports:
+      - 5431:5432
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: db_notify
+    volumes:
+      - db_notify_data:/var/lib/postgresql/data
+
+  notify:
+    image: notify-service
+    container_name: notify-service
+    build: ./notify
+    hostname: notify-service
+    volumes:
+      - ./notify/:/app/
+      - /app/node_modules
+    restart: always
+    environment:
+      DB_HOST: db_notify
+      PORT: 5000
+      DB_PORT: 5432
+      DB_NAME: db_notify
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      RABBITMQ_SERVER_URL: ${RABBITMQ_SERVER_URL}
+      RABBITMQ_QUEUE_NAME: ${RABBITMQ_QUEUE_NAME}
+      EMAIL_SENDER: ${EMAIL_SENDER}
+      EMAIL_SENDER_PASSWORD: ${EMAIL_SENDER_PASSWORD}
+    ports:
+      - 5000:5000
+    depends_on:
+      - db_notify
+      - rabbitmq
+
+  db_notes:
+    container_name: db_notes
+    image: postgres:14.1-alpine
+    hostname: db_notes
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: db_notes
+    volumes:
+      - db_notes_data:/var/lib/postgresql/data
+
+  notes:
+    image: note-service
+    container_name: note-service
+    build: ./notes
+    hostname: note-service
+    volumes:
+      - ./notes/:/app/
+      - /app/node_modules
+    restart: always
+    environment:
+      DB_HOST: db_notes
+      PORT: 4000
+      DB_PORT: 5432
+      DB_NAME: db_notes
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - 4000:4000
+    depends_on:
+      - db_notes
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "test@gmail.com"
+      PGADMIN_DEFAULT_PASSWORD: "pass"
+    ports:
+      - "5050:80"
+    depends_on:
+      - db_users
+      - db_notify
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    hostname: rabbitmq
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/
+      - rabbitmq_log:/var/log/rabbitmq/
+
+volumes:
+  rabbitmq_data:
+  rabbitmq_log:
+  pgadmin_data:
+  db_users_data:
+  db_notify_data:
+  db_notes_data:
